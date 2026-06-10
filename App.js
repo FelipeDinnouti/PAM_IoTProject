@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, View, Text, ActivityIndicator, ScrollView } from 'react-native';
 import MQTTService from './src/services/mqttService';
 import StatusModal from './src/components/StatusModal';
 import LightControl from './src/components/LightControl';
 import Gauges from './src/components/Gauges';
+import TemperatureChart from './src/components/TemperatureChart';
+import HumidityChart from './src/components/HumidityChart';
+import LightTimeline from './src/components/LightTimeline';
 import { loadInitialState, saveState } from './src/services/storageService';
+import { fetchHistory } from './src/services/apiService';
 
 const mqtt = new MQTTService();
+const POLL_INTERVAL = 30000;
 
 export default function App() {
   const [loaded, setLoaded] = useState(false);
@@ -16,6 +21,11 @@ export default function App() {
   const [temp, setTemp] = useState(0);
   const [hum, setHum] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [tempHistory, setTempHistory] = useState([]);
+  const [humHistory, setHumHistory] = useState([]);
+  const [lightHistory, setLightHistory] = useState([]);
+
+  const pollRef = useRef(null);
 
   useEffect(() => {
     loadInitialState().then((saved) => {
@@ -25,13 +35,13 @@ export default function App() {
       setLastUpdated(saved.lastUpdated);
       setLoaded(true);
     });
-  }, [])
+  }, []);
 
   useEffect(() => {
     if (loaded) {
       saveState({ temp, hum, isLightOn });
     }
-  }, [temp, hum, isLightOn])
+  }, [temp, hum, isLightOn]);
 
   const mqttConfig = {
     host: process.env.EXPO_PUBLIC_MQTT_HOST,
@@ -44,7 +54,8 @@ export default function App() {
 
   useEffect(() => {
     startConnection();
-  }, [])
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
   const startConnection = () => {
     setShowError(false);
@@ -69,10 +80,28 @@ export default function App() {
     );
   };
 
+  const pollHistory = useCallback(async () => {
+    const [tempData, humData, lightData] = await Promise.all([
+      fetchHistory('temp', 50),
+      fetchHistory('umid', 50),
+      fetchHistory('luz', 100),
+    ]);
+    if (tempData.length) setTempHistory(tempData);
+    if (humData.length) setHumHistory(humData);
+    if (lightData.length) setLightHistory(lightData);
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    pollHistory();
+    pollRef.current = setInterval(pollHistory, POLL_INTERVAL);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [isConnected, pollHistory]);
+
   const toggleLight = () => {
     const newState = isLightOn ? "0" : "1";
     mqtt.publish('casa/luz', newState);
-  }
+  };
 
   if (!loaded) {
     return (
@@ -83,28 +112,32 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.header}>Smart Home IoT</Text>
 
-      <LightControl isLightOn={isLightOn} onToggle={toggleLight}/>
-      <Gauges temp={temp} hum={hum} lastUpdated={lastUpdated}/>
+      <LightControl isLightOn={isLightOn} onToggle={toggleLight} />
+      <Gauges temp={temp} hum={hum} lastUpdated={lastUpdated} />
+      <TemperatureChart data={tempHistory} />
+      <HumidityChart data={humHistory} />
+      <LightTimeline data={lightHistory} />
 
       <StatusModal
         visible={showError}
         onRetry={startConnection}
         onLater={() => setShowError(false)}
       />
-    </View>
+    </ScrollView>
   );
-
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1, 
+  scroll: {
+    flex: 1,
     backgroundColor: '#121212',
+  },
+  container: {
     padding: 20,
-    alignItems: 'center'
+    alignItems: 'center',
   },
   center: {
     flex: 1,
@@ -117,6 +150,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 40,
-    marginBottom: 20
+    marginBottom: 20,
   },
 });
