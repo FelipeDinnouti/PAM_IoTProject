@@ -22,6 +22,12 @@ export default class MQTTService {
             onMessage(message.destinationName, message.payloadString);
         };
 
+        this.client.onConnectionLost = (response) => {
+            if (onFailure) {
+                onFailure({ errorCode: response.errorCode, errorMessage: response.errorMessage });
+            }
+        };
+
         const options = {
             userName: user,
             password: pass, 
@@ -34,6 +40,12 @@ export default class MQTTService {
 
         this.client.connect(options);
         
+    }
+
+    disconnect() {
+        if (this.client && this.client.isConnected()) {
+            this.client.disconnect();
+        }
     }
 
     subscribe(topic) {

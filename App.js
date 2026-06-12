@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, ScrollView, AppState } from 'react-native';
 import MQTTService from './src/services/mqttService';
 import StatusModal from './src/components/StatusModal';
 import LightControl from './src/components/LightControl';
@@ -13,6 +13,16 @@ import { fetchHistory } from './src/services/apiService';
 const mqtt = new MQTTService();
 const POLL_INTERVAL = 30000;
 
+const mqttConfig = {
+  host: process.env.EXPO_PUBLIC_MQTT_HOST,
+  port: parseInt(process.env.EXPO_PUBLIC_MQTT_PORT) || 8884,
+  path: process.env.EXPO_PUBLIC_MQTT_PATH || '/mqtt',
+  user: process.env.EXPO_PUBLIC_MQTT_USER,
+  pass: process.env.EXPO_PUBLIC_MQTT_PASS,
+  clientId: 'RN_App_' + Math.random(),
+};
+const configValid = !!(mqttConfig.host && mqttConfig.user && mqttConfig.pass);
+
 export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -24,6 +34,7 @@ export default function App() {
   const [tempHistory, setTempHistory] = useState([]);
   const [humHistory, setHumHistory] = useState([]);
   const [lightHistory, setLightHistory] = useState([]);
+  const [isForeground, setIsForeground] = useState(true);
 
   const pollRef = useRef(null);
 
@@ -43,21 +54,30 @@ export default function App() {
     }
   }, [temp, hum, isLightOn]);
 
-  const mqttConfig = {
-    host: process.env.EXPO_PUBLIC_MQTT_HOST,
-    port: parseInt(process.env.EXPO_PUBLIC_MQTT_PORT),
-    path: process.env.EXPO_PUBLIC_MQTT_PATH || '/mqtt',
-    user: process.env.EXPO_PUBLIC_MQTT_USER,
-    pass: process.env.EXPO_PUBLIC_MQTT_PASS,
-    clientId: 'RN_App_' + Math.random(),
-  };
+  useEffect(() => {
+    if (!configValid) {
+      setShowError(true);
+      return;
+    }
+    startConnection();
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      mqtt.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
-    startConnection();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setIsForeground(nextAppState === 'active');
+    });
+    return () => subscription.remove();
   }, []);
 
   const startConnection = () => {
+    if (!configValid) {
+      setShowError(true);
+      return;
+    }
     setShowError(false);
     mqtt.connect(
       mqttConfig,
@@ -92,14 +112,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !isForeground) return;
     pollHistory();
     pollRef.current = setInterval(pollHistory, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [isConnected, pollHistory]);
+  }, [isConnected, isForeground, pollHistory]);
 
   const toggleLight = () => {
     const newState = isLightOn ? "0" : "1";
+    setIsLightOn(!isLightOn);
     mqtt.publish('casa/luz', newState);
   };
 

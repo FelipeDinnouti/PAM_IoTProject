@@ -13,9 +13,9 @@ router.get('/history/:sensor', async (req, res) => {
   }
 
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
-    const from = req.query.from ? parseInt(req.query.from) : null;
-    const to = req.query.to ? parseInt(req.query.to) : null;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
+    const from = req.query.from ? parseInt(req.query.from, 10) : null;
+    const to = req.query.to ? parseInt(req.query.to, 10) : null;
 
     const data = await getHistory(sensor, limit, from, to);
     res.json({ sensor, count: data.length, data });

@@ -14,7 +14,7 @@ function startMqttListener(config) {
     username: config.user,
     password: config.pass,
     clientId: config.clientId || 'PAM_Backend_' + Math.random().toString(16).slice(2, 10),
-    rejectUnauthorized: false,
+    rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false',
   });
 
   client.on('connect', () => {

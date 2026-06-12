@@ -87,4 +87,4 @@ async function getLatestAll() {
   return result;
 }
 
-module.exports = { insertReading, getHistory, getLatest, getLatestAll };
+module.exports = { insertReading, getHistory, getLatest, getLatestAll, saveDb };
