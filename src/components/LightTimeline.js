@@ -5,7 +5,9 @@ import Svg, { Rect } from 'react-native-svg';
 const TIMELINE_WIDTH = Dimensions.get('window').width - 72;
 
 function formatTime(ts) {
+  if (!ts) return '--:--';
   const d = new Date(ts);
+  if (isNaN(d.getTime())) return '--:--';
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
@@ -54,7 +56,7 @@ export default function LightTimeline({ data }) {
             : TIMELINE_WIDTH;
           return (
             <Rect
-              key={i}
+              key={seg.startTs}
               x={x}
               y={8}
               width={w}
@@ -117,13 +119,12 @@ const styles = StyleSheet.create({
   legendRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
     marginTop: 10,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginHorizontal: 10,
   },
   legendDot: {
     width: 10,

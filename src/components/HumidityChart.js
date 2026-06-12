@@ -5,7 +5,9 @@ import { LineChart } from 'react-native-chart-kit';
 const screenWidth = Dimensions.get('window').width - 40;
 
 function formatTime(ts) {
+  if (!ts) return '--:--';
   const d = new Date(ts);
+  if (isNaN(d.getTime())) return '--:--';
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
